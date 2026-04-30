@@ -7,15 +7,18 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build unsigned IPA
+      - name: Build iOS (unsigned)
         script: |
+          cd ios
+          pod install
+          cd ..
           flutter build ios --release --no-codesign
+      - name: Create IPA
+        script: |
           mkdir -p build/ios/ipa
           cd build/ios/iphoneos
+          mkdir Payload
+          cp -r Runner.app Payload/
           zip -r ../ipa/emk_app.ipa Payload/
     artifacts:
       - build/ios/ipa/*.ipa
-    publishing:
-      email:
-        recipients:
-          - emkurr@yandex.ru
