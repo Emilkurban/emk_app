@@ -4,13 +4,16 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      ios_signing:
-        distribution_type: development
-        bundle_identifier: az.emk.emkWebview
     scripts:
       - name: Get packages
         script: flutter pub get
-      - name: Build IPA
-        script: flutter build ipa --release
+      - name: Build unsigned IPA
+        script: |
+          flutter build ios --release --no-codesign
+          mkdir -p build/ios/ipa
+          cd build/ios/iphoneos
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -r ../ipa/emk_app.ipa Payload/
     artifacts:
       - build/ios/ipa/*.ipa
