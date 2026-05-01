@@ -68,6 +68,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
             const Center(
               child: CircularProgressIndicator(),
             ),
+          // Плавающая кнопка обновления внизу справа
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: () {
+                controller.reload();
+                setState(() {
+                  isLoading = true;
+                });
+              },
+              child: const Icon(Icons.refresh),
+            ),
+          ),
         ],
       ),
     );
