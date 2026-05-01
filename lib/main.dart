@@ -41,9 +41,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (url) {
-            setState(() {
-              isLoading = false;
-            });
+            setState(() => isLoading = false);
+          },
+          onNavigationRequest: (request) {
+            // Быстрые звонки без удержания
+            if (request.url.startsWith('tel:')) {
+              controller.loadRequest(Uri.parse(request.url));
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
           },
         ),
       )
@@ -53,20 +59,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('EMK'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => controller.reload(),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
+          // WebView на весь экран
           WebViewWidget(controller: controller),
+          // Индикатор загрузки поверх WebView
           if (isLoading)
             const Center(
               child: CircularProgressIndicator(),
