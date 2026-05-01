@@ -44,7 +44,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             setState(() => isLoading = false);
           },
           onNavigationRequest: (request) {
-            // Быстрые звонки без удержания
             if (request.url.startsWith('tel:')) {
               controller.loadRequest(Uri.parse(request.url));
               return NavigationDecision.prevent;
@@ -58,31 +57,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Добавляем отступ сверху, чтобы контент не заезжал под статус бар
     return Scaffold(
-      body: Stack(
-        children: [
-          // WebView на весь экран
-          WebViewWidget(controller: controller),
-          // Индикатор загрузки поверх WebView
-          if (isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            WebViewWidget(controller: controller),
+            if (isLoading)
+              const Center(
+                child: CircularProgressIndicator(),
+              ),
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: () {
+                  controller.reload();
+                  setState(() => isLoading = true);
+                },
+                child: const Icon(Icons.refresh),
+              ),
             ),
-          // Плавающая кнопка обновления внизу справа
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: FloatingActionButton(
-              onPressed: () {
-                controller.reload();
-                setState(() {
-                  isLoading = true;
-                });
-              },
-              child: const Icon(Icons.refresh),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
