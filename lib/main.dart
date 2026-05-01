@@ -57,7 +57,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Добавляем отступ сверху, чтобы контент не заезжал под статус бар
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -67,17 +66,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
               const Center(
                 child: CircularProgressIndicator(),
               ),
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () {
-                  controller.reload();
-                  setState(() => isLoading = true);
-                },
-                child: const Icon(Icons.refresh),
-              ),
-            ),
           ],
         ),
       ),
