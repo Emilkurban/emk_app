@@ -7,8 +7,6 @@ workflows:
       ios_signing:
         distribution_type: development
         bundle_identifier: az.emk.emkWebview
-        apple_id: emkurr@yandex.ru
-        apple_id_password: vlue-gkng-efbn-jixd
     scripts:
       - name: Get packages
         script: flutter pub get
