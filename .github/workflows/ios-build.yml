@@ -1,57 +1,13 @@
-name: iOS Build and Publish
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: macos-14
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate Launcher Icons
-        run: flutter pub run flutter_launcher_icons
-
-      - name: Install Apple Private Key
-        env:
-          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-        run: |
-          mkdir -p ~/.private_keys
-          echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_$KEY_ID.p8
-
-      - name: Build and Sign Xcode Archive
+- name: Build and Sign Xcode Archive
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # 1. Сначала готовим iOS-файлы через Flutter
+          # 1. Сначала подготавливаем iOS файлы через Flutter
           flutter build ios --release --no-codesign
           
-          # 2. Собираем официальный архив (.xcarchive) и запрашиваем Provisioning Profile у Apple автоматически
-          xcodebuild -workspace ios/Runner.xcworkspace \
-                     -scheme Runner \
-                     -configuration Release \
-                     -archivePath build/ios/Runner.xcarchive \
-                     -allowProvisioningUpdates \
-                     -authenticationKeyID "$KEY_ID" \
-                     -authenticationKeyIssuerID "$ISSUER_ID" \
-                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8" \
-                     archive
-
-          # 3. Экспортируем архив в готовый к публикации .ipa файл
-          # Создаем временный файл настроек экспорта
+          # 2. Создаем временный файл настроек экспорта ЗАРАНЕЕ, 
+          # чтобы Xcode знал, что мы собираем App Store (Release) версию
           cat <<EOF > exportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -69,6 +25,21 @@ jobs:
           </plist>
           EOF
 
+          # 3. Собираем архив, явно указывая тип сборки, чтобы избежать ошибок с "Device isn't registered"
+          xcodebuild -workspace ios/Runner.xcworkspace \
+                     -scheme Runner \
+                     -configuration Release \
+                     -archivePath build/ios/Runner.xcarchive \
+                     -allowProvisioningUpdates \
+                     -authenticationKeyID "$KEY_ID" \
+                     -authenticationKeyIssuerID "$ISSUER_ID" \
+                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8" \
+                     CODE_SIGN_STYLE="Automatic" \
+                     PROVISIONING_PROFILE_SPECIFIER="" \
+                     DEVELOPMENT_TEAM="9FDTFY8954" \
+                     archive
+
+          # 4. Экспортируем готовый .ipa
           xcodebuild -exportArchive \
                      -archivePath build/ios/Runner.xcarchive \
                      -exportPath build/ios/ipa \
@@ -77,15 +48,3 @@ jobs:
                      -authenticationKeyID "$KEY_ID" \
                      -authenticationKeyIssuerID "$ISSUER_ID" \
                      -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8"
-
-      - name: Upload to App Store Connect
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          # Находим сгенерированный .ipa файл
-          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
-          echo "Found Signed IPA at: $IPA_PATH"
-          
-          # Отправляем полноценный подписанный пакет в Apple
-          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
