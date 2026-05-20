@@ -1,13 +1,9 @@
 workflows:
   ios-release:
     name: iOS Release
-    integrations:
-      - app_store_connect
     environment:
       flutter: stable
       xcode: latest
-      groups:
-        - app_store_credentials
     scripts:
       - name: Get packages
         script: flutter pub get
@@ -21,7 +17,3 @@ workflows:
           flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
