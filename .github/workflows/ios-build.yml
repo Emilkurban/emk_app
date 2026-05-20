@@ -2,11 +2,11 @@ name: iOS Build and Publish
 
 on:
   push:
-    branches: [ main ] # Сборка будет запускаться сама при каждом сохранении в ветку main
+    branches: [ main ]
 
 jobs:
   deploy:
-    runs-on: macos-14 # Запускаем на свежей macOS с Xcode 15+
+    runs-on: macos-14
 
     steps:
       - name: Checkout repository
@@ -15,8 +15,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
-          channel: 'stable'
+          channel: 'stable' # Оставили только канал, теперь путаницы не будет
 
       - name: Install dependencies
         run: flutter pub get
@@ -34,7 +33,6 @@ jobs:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Собираем архив приложения
           flutter build ipa --release --no-codesign
 
       - name: Upload IPA to GitHub Artifacts
