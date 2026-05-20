@@ -1,0 +1,44 @@
+name: iOS Build and Publish
+
+on:
+  push:
+    branches: [ main ] # Сборка будет запускаться сама при каждом сохранении в ветку main
+
+jobs:
+  deploy:
+    runs-on: macos-14 # Запускаем на свежей macOS с Xcode 15+
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Install Apple Private Key
+        env:
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          mkdir -p ~/.private_keys
+          echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_$KEY_ID.p8
+
+      - name: Build and Sign IPA
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Собираем архив приложения
+          flutter build ipa --release --no-codesign
+
+      - name: Upload IPA to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ipa
+          path: build/ios/ipa/*.ipa
