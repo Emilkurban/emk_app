@@ -33,8 +33,9 @@ jobs:
 
       - name: Build Xcode Archive
         run: |
-          # Форсируем использование твоего правильного Bundle ID при сборке
-          flutter build ios --release --no-codesign --bundle-sfx=az.emk.emkWebview
+          # Чистая сборка под iOS. Флаг --no-codesign отключает локальную подпись на Mac, 
+          # так как мы будем использовать altool с API-ключом.
+          flutter build ios --release --no-codesign
 
       - name: Upload to App Store Connect
         env:
