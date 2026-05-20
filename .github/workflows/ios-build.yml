@@ -33,7 +33,7 @@ jobs:
 
       - name: Build Xcode Archive
         run: |
-          # Собираем xcarchive — это гарантированно создаст нужные файлы без требования локальных сертификатов Mac
+          # Собираем приложение в релизном режиме без локальной подписи
           flutter build ios --release --no-codesign
 
       - name: Upload to App Store Connect
@@ -41,10 +41,12 @@ jobs:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Находим созданный архив приложения
+          # Находим скомпилированное приложение Runner.app
           ARCHIVE_PATH=$(find build/ios/iphoneos -name "*.app" | head -n 1)
           echo "Found App Bundle at: $ARCHIVE_PATH"
           
-          # Утилита altool умеет упаковывать и отправлять напрямую .app или .xcarchive
-          # Передаем напрямую сгенерированное приложение
-          xcrun altool --upload-app --type ios --file "$ARCHIVE_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          # Упаковываем его в архив, так как altool требует упакованный формат
+          zip -r build/ios/iphoneos/emk_app.zip "$ARCHIVE_PATH"
+          
+          # Отправляем готовый архив напрямую в TestFlight / App Store Connect
+          xcrun altool --upload-app --type ios --file build/ios/iphoneos/emk_app.zip --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
