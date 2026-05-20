@@ -33,6 +33,7 @@ jobs:
 
       - name: Build and Sign IPA
         run: |
+          # Собираем архив приложения. Нам нужен ключ --no-codesign, так как мы подписываем через altool API
           flutter build ipa --release --no-codesign
 
       - name: Upload to App Store Connect
@@ -40,4 +41,15 @@ jobs:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          xcrun altool --upload-app --type ios --file build/ios/ipa/*.ipa --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          # Находим точный путь к созданному файлу без использования звездочки
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          
+          if [ -z "$IPA_PATH" ]; then
+            # Если во Flutter build ipa путь отличается, проверим стандартный архив
+            IPA_PATH=$(find build -name "*.ipa" | head -n 1)
+          fi
+          
+          echo "Found IPA at: $IPA_PATH"
+          
+          # Загружаем в Apple Store по точному пути
+          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
