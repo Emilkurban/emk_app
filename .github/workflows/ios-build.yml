@@ -31,25 +31,20 @@ jobs:
           mkdir -p ~/.private_keys
           echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_$KEY_ID.p8
 
-      - name: Build and Sign IPA
+      - name: Build Xcode Archive
         run: |
-          # Собираем архив приложения. Нам нужен ключ --no-codesign, так как мы подписываем через altool API
-          flutter build ipa --release --no-codesign
+          # Собираем xcarchive — это гарантированно создаст нужные файлы без требования локальных сертификатов Mac
+          flutter build ios --release --no-codesign
 
       - name: Upload to App Store Connect
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Находим точный путь к созданному файлу без использования звездочки
-          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          # Находим созданный архив приложения
+          ARCHIVE_PATH=$(find build/ios/iphoneos -name "*.app" | head -n 1)
+          echo "Found App Bundle at: $ARCHIVE_PATH"
           
-          if [ -z "$IPA_PATH" ]; then
-            # Если во Flutter build ipa путь отличается, проверим стандартный архив
-            IPA_PATH=$(find build -name "*.ipa" | head -n 1)
-          fi
-          
-          echo "Found IPA at: $IPA_PATH"
-          
-          # Загружаем в Apple Store по точному пути
-          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          # Утилита altool умеет упаковывать и отправлять напрямую .app или .xcarchive
+          # Передаем напрямую сгенерированное приложение
+          xcrun altool --upload-app --type ios --file "$ARCHIVE_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
