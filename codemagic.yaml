@@ -6,6 +6,8 @@ workflows:
       xcode: latest
       groups:
         - app_store_credentials
+      integrations:
+        - app_store_connect # Вот эта строчка свяжет код с твоим ключом Apple
     scripts:
       - name: Get packages
         script: flutter pub get
