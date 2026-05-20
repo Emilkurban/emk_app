@@ -31,23 +31,61 @@ jobs:
           mkdir -p ~/.private_keys
           echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_$KEY_ID.p8
 
-      - name: Build Xcode Archive
+      - name: Build and Sign Xcode Archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Чистая сборка под iOS. Флаг --no-codesign отключает локальную подпись на Mac, 
-          # так как мы будем использовать altool с API-ключом.
+          # 1. Сначала готовим iOS-файлы через Flutter
           flutter build ios --release --no-codesign
+          
+          # 2. Собираем официальный архив (.xcarchive) и запрашиваем Provisioning Profile у Apple автоматически
+          xcodebuild -workspace ios/Runner.xcworkspace \
+                     -scheme Runner \
+                     -configuration Release \
+                     -archivePath build/ios/Runner.xcarchive \
+                     -allowProvisioningUpdates \
+                     -authenticationKeyID "$KEY_ID" \
+                     -authenticationKeyIssuerID "$ISSUER_ID" \
+                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8" \
+                     archive
+
+          # 3. Экспортируем архив в готовый к публикации .ipa файл
+          # Создаем временный файл настроек экспорта
+          cat <<EOF > exportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <true/>
+              <key>signingStyle</key>
+              <string>automatic</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+                     -archivePath build/ios/Runner.xcarchive \
+                     -exportPath build/ios/ipa \
+                     -exportOptionsPlist exportOptions.plist \
+                     -allowProvisioningUpdates \
+                     -authenticationKeyID "$KEY_ID" \
+                     -authenticationKeyIssuerID "$ISSUER_ID" \
+                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8"
 
       - name: Upload to App Store Connect
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Находим скомпилированное приложение Runner.app
-          ARCHIVE_PATH=$(find build/ios/iphoneos -name "*.app" | head -n 1)
-          echo "Found App Bundle at: $ARCHIVE_PATH"
+          # Находим сгенерированный .ipa файл
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          echo "Found Signed IPA at: $IPA_PATH"
           
-          # Упаковываем в ZIP
-          zip -r build/ios/iphoneos/emk_app.zip "$ARCHIVE_PATH"
-          
-          # Отправляем в App Store Connect
-          xcrun altool --upload-app --type ios --file build/ios/iphoneos/emk_app.zip --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          # Отправляем полноценный подписанный пакет в Apple
+          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
