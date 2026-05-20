@@ -58,7 +58,12 @@ jobs:
           </plist>
           EOF
 
-          # 3. Собираем архив, принудительно запрашивая App Store профиль у Apple
+          # 3. ХАК/ПАТЧ: Меняем настройки подписи внутри проекта напрямую. 
+          # Переключаем назначение с Development на App Store, чтобы Xcode не требовал регистрации Mac в Developer ID
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DevelopmentTeam = 9FDTFY8954;/DevelopmentTeam = 9FDTFY8954;\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
+
+          # 4. Собираем архив, явно указав метод распределения (App Store)
           xcodebuild -workspace ios/Runner.xcworkspace \
                      -scheme Runner \
                      -configuration Release \
@@ -67,12 +72,10 @@ jobs:
                      -authenticationKeyID "$KEY_ID" \
                      -authenticationKeyIssuerID "$ISSUER_ID" \
                      -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8" \
-                     CODE_SIGN_STYLE="Automatic" \
-                     PROVISIONING_PROFILE_SPECIFIER="" \
-                     DEVELOPMENT_TEAM="9FDTFY8954" \
+                     -destination 'generic/platform=iOS' \
                      archive
 
-          # 4. Экспортируем готовый подписанный .ipa файл
+          # 5. Экспортируем готовый подписанный .ipa файл
           xcodebuild -exportArchive \
                      -archivePath build/ios/Runner.xcarchive \
                      -exportPath build/ios/ipa \
@@ -88,8 +91,8 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           # Находим сгенерированный .ipa файл
-          IPA_PATH=\$(find build/ios/ipa -name "*.ipa" | head -n 1)
-          echo "Found Signed IPA at: \$IPA_PATH"
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          echo "Found Signed IPA at: $IPA_PATH"
           
           # Отправляем официальный пакет в TestFlight / App Store
-          xcrun altool --upload-app --type ios --file "\$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
