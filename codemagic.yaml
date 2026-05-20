@@ -4,16 +4,22 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+      groups:
+        - app_store_credentials
     scripts:
       - name: Get packages
         script: flutter pub get
-      - name: Build unsigned IPA
+      - name: Set up code signing
         script: |
-          flutter build ios --release --no-codesign
-          mkdir -p build/ios/ipa
-          cd build/ios/iphoneos
-          mkdir Payload
-          cp -r Runner.app Payload/
-          zip -r ../ipa/emk_app.ipa Payload/
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+      - name: Build signed IPA
+        script: |
+          flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
