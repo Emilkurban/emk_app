@@ -7,11 +7,18 @@ on:
 
 jobs:
   deploy:
-    runs-on: macos-14
+    # Переключаемся на актуальное окружение macOS 15
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Принудительно выбираем Xcode 26+, чтобы соответствовать правилам Apple 2026 года
+      - name: Set up Xcode version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
+          xcodebuild -version
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -58,12 +65,11 @@ jobs:
           </plist>
           EOF
 
-          # 3. ХАК/ПАТЧ: Меняем настройки подписи внутри проекта напрямую. 
-          # Переключаем назначение с Development на App Store, чтобы Xcode не требовал регистрации Mac в Developer ID
+          # 3. Патчим конфигурацию под Apple Distribution
           sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
           sed -i '' 's/DevelopmentTeam = 9FDTFY8954;/DevelopmentTeam = 9FDTFY8954;\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
 
-          # 4. Собираем архив, явно указав метод распределения (App Store)
+          # 4. Собираем архив на базе нового SDK
           xcodebuild -workspace ios/Runner.xcworkspace \
                      -scheme Runner \
                      -configuration Release \
@@ -94,5 +100,5 @@ jobs:
           IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
           echo "Found Signed IPA at: $IPA_PATH"
           
-          # Отправляем официальный пакет в TestFlight / App Store
+          # Отправляем пакет в TestFlight / App Store
           xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
