@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shared_preferences/shared_preferences.dart';  // для сохранения данных
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,7 +34,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
   late final WebViewController controller;
   bool isLoading = true;
 
-  // Ключи для сохранения региона
   static const String REGION_KEY = 'emk_user_region';
   static const String CITY_KEY = 'emk_user_city_label';
 
@@ -48,18 +47,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
         NavigationDelegate(
           onPageFinished: (url) {
             setState(() => isLoading = false);
-            // После загрузки страницы восстанавливаем сохранённый регион из iOS
             _restoreRegionToWebView();
-            // Добавляем JavaScript-обработчик для сохранения региона при его изменении на сайте
             _injectSaveRegionHandler();
           },
           onNavigationRequest: (request) {
-            // Обработка звонков
             if (request.url.startsWith('tel:')) {
               _makePhoneCall(request.url);
               return NavigationDecision.prevent;
             }
-            // Обработка WhatsApp
             if (request.url.startsWith('https://wa.me/') ||
                 request.url.startsWith('whatsapp:')) {
               _openWhatsApp(request.url);
@@ -72,14 +67,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..loadRequest(Uri.parse('https://emk.az'));
   }
 
-  /// Восстанавливает сохранённый регион из памяти iOS и вставляет в WebView
   Future<void> _restoreRegionToWebView() async {
     final prefs = await SharedPreferences.getInstance();
     final savedRegion = prefs.getString(REGION_KEY);
     final savedCity = prefs.getString(CITY_KEY);
 
     if (savedRegion != null || savedCity != null) {
-      // Формируем JavaScript код для восстановления кук и localStorage
       String js = '';
       if (savedRegion != null) {
         js += "document.cookie = 'emk_user_region=${_escapeJs(savedRegion)}; path=/; max-age=31536000';";
@@ -89,69 +82,61 @@ class _WebViewScreenState extends State<WebViewScreen> {
         js += "document.cookie = 'emk_user_city_label=${_escapeJs(savedCity)}; path=/; max-age=31536000';";
         js += "localStorage.setItem('emk_user_city_label', '${_escapeJs(savedCity)}');";
       }
-      // Обновляем input location, если есть
+      
+      // ИСПРАВЛЕННЫЙ КОД - проверяем на null и используем значение по умолчанию
+      String displayValue = '';
+      if (savedCity != null && savedCity.isNotEmpty) {
+        displayValue = savedCity;
+      } else if (savedRegion != null && savedRegion.isNotEmpty) {
+        displayValue = savedRegion;
+      } else {
+        displayValue = 'Baku';
+      }
+      
       js += """
         var input = document.querySelector('input[name="location"]');
         if (input) {
-          input.value = '${_escapeJs(savedCity ?? savedRegion)}';
+          input.value = '${_escapeJs(displayValue)}';
           input.dispatchEvent(new Event('change', {bubbles: true}));
         }
-        // Обновляем отображение кнопки выбора региона
         var btn = document.querySelector('#emkBtn span:first-child');
-        if (btn) btn.innerText = '${_escapeJs(savedCity ?? savedRegion)}';
+        if (btn) btn.innerText = '${_escapeJs(displayValue)}';
       """;
       await controller.runJavaScript(js);
-      print('Восстановлен регион: ${savedCity ?? savedRegion}');
     }
   }
 
-  /// Внедряет JavaScript, который при изменении региона на сайте отправляет данные во Flutter
   Future<void> _injectSaveRegionHandler() async {
     final String jsCode = """
       (function() {
-        // Функция сохранения региона
-        function saveRegionToFlutter(region, city) {
-          // Отправляем данные во Flutter через специальный канал
-          if (window.flutter_inappwebview) {
-            window.flutter_inappwebview.callHandler('saveRegion', region, city);
-          } else {
-            // Для webview_flutter используем window.location.href (костыль)
-            // Можно также использовать window.webkit.messageHandlers, но проще так:
-            console.log('Region changed:', region, city);
-            // Создаём кастомное событие, которое будем перехватывать через onPageStarted (не идеально)
-            // Поэтому лучше перейти на flutter_inappwebview, но для простоты:
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = 'jsbridge://saveRegion?region=' + encodeURIComponent(region) + '&city=' + encodeURIComponent(city);
-            document.body.appendChild(iframe);
-            setTimeout(() => iframe.remove(), 100);
-          }
+        function saveToNative(region, city) {
+          var iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = 'jsbridge://saveRegion?region=' + encodeURIComponent(region || '') + '&city=' + encodeURIComponent(city || '');
+          document.body.appendChild(iframe);
+          setTimeout(function() { iframe.remove(); }, 100);
         }
 
-        // Перехватываем установку кук (вызывается при выборе региона на сайте)
-        const originalSetCookie = document.cookie.__lookupSetter__;
+        var originalCookieSetter = document.__lookupSetter__('cookie');
         Object.defineProperty(document, 'cookie', {
           set: function(value) {
             if (value.includes('emk_user_region=')) {
-              let region = value.split('emk_user_region=')[1].split(';')[0];
-              saveRegionToFlutter(region, null);
+              var region = value.split('emk_user_region=')[1].split(';')[0];
+              saveToNative(decodeURIComponent(region), null);
             }
             if (value.includes('emk_user_city_label=')) {
-              let city = value.split('emk_user_city_label=')[1].split(';')[0];
-              saveRegionToFlutter(null, city);
+              var city = value.split('emk_user_city_label=')[1].split(';')[0];
+              saveToNative(null, decodeURIComponent(city));
             }
-            originalSetCookie?.call(this, value);
+            if (originalCookieSetter) originalCookieSetter.call(document, value);
           },
-          get: function() {
-            return originalGetCookie?.call(this);
-          }
+          get: function() { return document.cookie; }
         });
 
-        // Также следим за изменениями localStorage
-        const originalSetItem = localStorage.setItem;
+        var originalSetItem = localStorage.setItem;
         localStorage.setItem = function(key, value) {
-          if (key === 'emk_user_region') saveRegionToFlutter(value, null);
-          if (key === 'emk_user_city_label') saveRegionToFlutter(null, value);
+          if (key === 'emk_user_region') saveToNative(value, null);
+          if (key === 'emk_user_city_label') saveToNative(null, value);
           originalSetItem.apply(this, arguments);
         };
       })();
@@ -159,20 +144,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
     await controller.runJavaScript(jsCode);
   }
 
-  /// Сохраняет регион в SharedPreferences (вызывается из JavaScript)
   Future<void> _saveRegionToNative(String? region, String? city) async {
     final prefs = await SharedPreferences.getInstance();
-    if (region != null) {
+    if (region != null && region.isNotEmpty) {
       await prefs.setString(REGION_KEY, region);
       print('Сохранён регион: $region');
     }
-    if (city != null) {
+    if (city != null && city.isNotEmpty) {
       await prefs.setString(CITY_KEY, city);
       print('Сохранён город: $city');
     }
   }
 
-  // Обработка звонков
   Future<void> _makePhoneCall(String url) async {
     final Uri phoneUri = Uri.parse(url);
     try {
@@ -186,7 +169,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  // Обработка WhatsApp
   Future<void> _openWhatsApp(String url) async {
     final Uri whatsappUri = Uri.parse(url);
     try {
