@@ -1,104 +1,44 @@
-name: iOS Build and Publish
+name: Build IPA for Manual Upload
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
-    # Переключаемся на актуальное окружение macOS 15
-    runs-on: macos-15
-
+  build:
+    runs-on: macos-latest
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # Принудительно выбираем Xcode 26+, чтобы соответствовать правилам Apple 2026 года
-      - name: Set up Xcode version
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
-          xcodebuild -version
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate Launcher Icons
-        run: flutter pub run flutter_launcher_icons
-
-      - name: Install Apple Private Key
-        env:
-          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-        run: |
-          mkdir -p ~/.private_keys
-          echo "$PRIVATE_KEY" > ~/.private_keys/AuthKey_$KEY_ID.p8
-
-      - name: Build and Sign Xcode Archive
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          # 1. Подготавливаем iOS файлы через Flutter
-          flutter build ios --release --no-codesign
-          
-          # 2. Создаем файл настроек экспорта (под дистрибуцию)
-          cat <<EOF > exportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>destination</key>
-              <string>export</string>
-              <key>manageAppVersionAndBuildNumber</key>
-              <true/>
-              <key>signingStyle</key>
-              <string>automatic</string>
-          </dict>
-          </plist>
-          EOF
-
-          # 3. Патчим конфигурацию под Apple Distribution
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DevelopmentTeam = 9FDTFY8954;/DevelopmentTeam = 9FDTFY8954;\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/Runner.xcodeproj/project.pbxproj
-
-          # 4. Собираем архив на базе нового SDK
-          xcodebuild -workspace ios/Runner.xcworkspace \
-                     -scheme Runner \
-                     -configuration Release \
-                     -archivePath build/ios/Runner.xcarchive \
-                     -allowProvisioningUpdates \
-                     -authenticationKeyID "$KEY_ID" \
-                     -authenticationKeyIssuerID "$ISSUER_ID" \
-                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8" \
-                     -destination 'generic/platform=iOS' \
-                     archive
-
-          # 5. Экспортируем готовый подписанный .ipa файл
-          xcodebuild -exportArchive \
-                     -archivePath build/ios/Runner.xcarchive \
-                     -exportPath build/ios/ipa \
-                     -exportOptionsPlist exportOptions.plist \
-                     -allowProvisioningUpdates \
-                     -authenticationKeyID "$KEY_ID" \
-                     -authenticationKeyIssuerID "$ISSUER_ID" \
-                     -authenticationKeyPath "$HOME/.private_keys/AuthKey_$KEY_ID.p8"
-
-      - name: Upload to App Store Connect
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          # Находим сгенерированный .ipa файл
-          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
-          echo "Found Signed IPA at: $IPA_PATH"
-          
-          # Отправляем пакет в TestFlight / App Store
-          xcrun altool --upload-app --type ios --file "$IPA_PATH" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+    - uses: actions/checkout@v4
+    
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: |
+        flutter clean
+        flutter pub get
+        
+    - name: Install CocoaPods
+      run: |
+        cd ios
+        pod install --repo-update
+        cd ..
+    
+    - name: Build iOS app
+      run: flutter build ios --release --no-codesign
+    
+    - name: Create IPA
+      run: |
+        mkdir -p Payload
+        cp -r build/ios/iphoneos/Runner.app Payload/
+        zip -r EMK_v1.0.ipa Payload
+    
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: EMK-v1.0
+        path: EMK_v1.0.ipa
