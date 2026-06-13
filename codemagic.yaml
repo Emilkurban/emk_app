@@ -4,35 +4,21 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      vars:
-        APP_STORE_CONNECT_KEY_ID: $APP_STORE_CONNECT_KEY_ID
-        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
     scripts:
       - name: Clean and get dependencies
         script: |
           flutter clean
           flutter pub get
-      
       - name: Install CocoaPods
         script: |
           cd ios
           pod install --repo-update
           cd ..
-      
       - name: Build IPA
         script: |
           flutter build ipa --release
-      
-      - name: Archive IPA
-        script: |
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r emk_app.ipa Payload
-      
     artifacts:
       - build/ios/ipa/*.ipa
-      - emk_app.ipa
-    
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_KEY_ID
