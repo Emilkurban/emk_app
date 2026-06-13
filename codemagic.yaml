@@ -1,19 +1,40 @@
 workflows:
-  ios-release:
-    name: iOS Release
+  ios-workflow:
+    name: iOS Build & Upload to TestFlight
     environment:
       flutter: stable
       xcode: latest
+      vars:
+        APP_STORE_CONNECT_KEY_ID: $APP_STORE_CONNECT_KEY_ID
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
     scripts:
-      - name: Get packages
-        script: flutter pub get
-      - name: Set up code signing
+      - name: Clean and get dependencies
         script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
-          keychain add-certificates
-      - name: Build signed IPA
+          flutter clean
+          flutter pub get
+      
+      - name: Install CocoaPods
         script: |
-          flutter build ipa --release --export-options-plist=$HOME/export_options.plist
+          cd ios
+          pod install --repo-update
+          cd ..
+      
+      - name: Build IPA
+        script: |
+          flutter build ipa --release
+      
+      - name: Archive IPA
+        script: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r emk_app.ipa Payload
+      
     artifacts:
       - build/ios/ipa/*.ipa
+      - emk_app.ipa
+    
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_KEY_ID
+        api_issuer: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
