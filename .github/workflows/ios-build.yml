@@ -43,8 +43,20 @@ jobs:
         APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
       run: |
-        echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
-        xcrun altool --upload-app --file EMK_v1.0.ipa --type ios --apiKey "$APP_STORE_CONNECT_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" --apiPrivateKey private_key.p8 || true
+        # Создаем директорию и сохраняем ключ
+        mkdir -p ~/.private_keys
+        echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+        
+        # Убеждаемся, что ключ сохранен правильно
+        cat ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8 | head -1
+        
+        # Загружаем в App Store Connect
+        xcrun altool --upload-app \
+          --file EMK_v1.0.ipa \
+          --type ios \
+          --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+          --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+          --apiPrivateKey ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
       continue-on-error: true
     
     - name: Upload IPA artifact
