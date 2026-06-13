@@ -1,20 +1,26 @@
 workflows:
   default:
-    name: iOS Build & Upload to TestFlight
+    name: iOS Release Build
     environment:
       flutter: stable
       xcode: latest
     scripts:
-      - name: Clean and get dependencies
+      - name: Flutter clean
         script: |
           flutter clean
           flutter pub get
+      
+      - name: Generate launcher icons
+        script: |
+          flutter pub run flutter_launcher_icons
+      
       - name: Install CocoaPods
         script: |
           cd ios
           pod install --repo-update
           cd ..
-      - name: Build IPA
+      
+      - name: Build release IPA
         script: |
           flutter build ipa --release
     artifacts:
