@@ -172,17 +172,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
               const Center(
                 child: CircularProgressIndicator(),
               ),
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () {
-                  controller.reload();
-                  setState(() => isLoading = true);
-                },
-                child: const Icon(Icons.refresh),
-              ),
-            ),
           ],
         ),
       ),
