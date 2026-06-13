@@ -1,4 +1,4 @@
-name: Build IPA for Manual Upload
+name: Build and Upload to App Store
 
 on:
   push:
@@ -28,14 +28,15 @@ jobs:
         pod install --repo-update
         cd ..
     
-    - name: Build iOS app
-      run: flutter build ios --release --no-codesign
+    - name: Build iOS archive
+      run: |
+        flutter build ios --release
     
     - name: Create IPA
       run: |
         mkdir -p Payload
         cp -r build/ios/iphoneos/Runner.app Payload/
-        zip -r EMK_v1.0.ipa Payload
+        zip -r emk_app.ipa Payload
     
     - name: Upload to App Store Connect
       env:
@@ -43,24 +44,19 @@ jobs:
         APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
       run: |
-        # Создаем директорию и сохраняем ключ
-        mkdir -p ~/.private_keys
-        echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+        # Сохраняем ключ
+        echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
         
-        # Убеждаемся, что ключ сохранен правильно
-        cat ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8 | head -1
-        
-        # Загружаем в App Store Connect
+        # Загружаем в TestFlight
         xcrun altool --upload-app \
-          --file EMK_v1.0.ipa \
+          --file emk_app.ipa \
           --type ios \
           --apiKey "$APP_STORE_CONNECT_KEY_ID" \
           --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
-          --apiPrivateKey ~/.private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
-      continue-on-error: true
+          --apiPrivateKey private_key.p8
     
     - name: Upload IPA artifact
       uses: actions/upload-artifact@v4
       with:
-        name: EMK-v1.0
-        path: EMK_v1.0.ipa
+        name: EMK-App
+        path: emk_app.ipa
